@@ -1,8 +1,11 @@
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, Map, Sparkles, Zap, Target, BarChart3 } from "lucide-react";
+import { Download, Map, Sparkles, Zap, Target, BarChart3, Moon, Sun, LogIn, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/hooks/use-theme";
 import { supabase } from "@/integrations/supabase/client";
 import { Roadmap, StepProgress } from "@/types/roadmap";
 import { loadProgress, saveProgress, getCareerKey } from "@/lib/storage";
@@ -25,6 +28,15 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentKey, setCurrentKey] = useState("");
   const { toast } = useToast();
+  const { user, signOut } = useAuth();
+  const { toggle } = useTheme();
+  const navigate = useNavigate();
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  const handleToggleTheme = () => {
+    toggle();
+    setIsDark(!isDark);
+  };
 
   const handleGenerate = useCallback(async (career: string, level: string) => {
     setIsLoading(true);
@@ -35,12 +47,10 @@ const Index = () => {
       });
       if (error) throw error;
       if (data.error) throw new Error(data.error);
-
       const key = getCareerKey(career, level);
       setCurrentKey(key);
       setRoadmap(data as Roadmap);
-      const saved = loadProgress(key);
-      setProgress(saved);
+      setProgress(loadProgress(key));
       toast({ title: "Roadmap generated", description: `Your ${career} roadmap is ready.` });
     } catch (e: any) {
       toast({ title: "Error", description: e.message || "Failed to generate roadmap", variant: "destructive" });
@@ -64,10 +74,8 @@ const Index = () => {
     const content = [
       roadmap.title,
       `Total estimated: ${roadmap.totalWeeks} weeks\n`,
-      "SKILL GAP ANALYSIS:",
-      roadmap.skillGapAnalysis + "\n",
-      "INDUSTRY BENCHMARK:",
-      roadmap.industryBenchmark + "\n",
+      "SKILL GAP ANALYSIS:", roadmap.skillGapAnalysis + "\n",
+      "INDUSTRY BENCHMARK:", roadmap.industryBenchmark + "\n",
       "STEPS:",
       ...roadmap.steps.map((s) =>
         `\n${s.id}. ${s.title} (${s.estimatedHours}h)\n   ${s.description}\n   Skills: ${s.skills.join(", ")}\n   Resources:\n${s.resources.map((r) => `   - ${r.title}: ${r.url}`).join("\n")}`
@@ -86,7 +94,7 @@ const Index = () => {
   const showDashboard = roadmap || isLoading;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-sm">
         <div className="container flex items-center justify-between h-14 px-6 mx-auto max-w-6xl">
@@ -98,19 +106,49 @@ const Index = () => {
               PathFinder<span className="text-primary">AI</span>
             </span>
           </div>
-          {roadmap && (
-            <Button onClick={exportRoadmap} variant="outline" size="sm" className="gap-1.5 text-xs">
-              <Download className="h-3.5 w-3.5" />
-              Export
+
+          <div className="flex items-center gap-2">
+            {/* Theme toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleTheme}
+              className="h-9 w-9 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-          )}
+
+            {/* Auth buttons */}
+            {user ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground hidden sm:inline truncate max-w-[120px]">
+                  {user.email}
+                </span>
+                <Button variant="ghost" size="sm" onClick={signOut} className="gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                  <LogOut className="h-3.5 w-3.5" />
+                  Sign Out
+                </Button>
+              </div>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => navigate("/auth")} className="gap-1.5 text-xs">
+                <LogIn className="h-3.5 w-3.5" />
+                Sign In
+              </Button>
+            )}
+
+            {roadmap && (
+              <Button onClick={exportRoadmap} variant="outline" size="sm" className="gap-1.5 text-xs">
+                <Download className="h-3.5 w-3.5" />
+                Export
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
       <main className="container mx-auto max-w-6xl px-6 py-10">
         <AnimatePresence mode="wait">
           {!showDashboard ? (
-            /* ── Hero ── */
             <motion.div key="hero" {...fade} exit={{ opacity: 0, y: -12 }} className="max-w-2xl mx-auto text-center py-16">
               <motion.div {...fade} transition={{ delay: 0.05 }} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 mb-6">
                 <Sparkles className="h-3 w-3 text-primary" />
@@ -118,8 +156,7 @@ const Index = () => {
               </motion.div>
 
               <motion.h2 {...fade} transition={{ delay: 0.1 }} className="text-4xl md:text-5xl font-bold tracking-tight text-foreground leading-[1.1] mb-4">
-                Build Your Career{" "}
-                <span className="text-primary">Roadmap</span>
+                Build Your Career <span className="text-primary">Roadmap</span>
               </motion.h2>
 
               <motion.p {...fade} transition={{ delay: 0.15 }} className="text-muted-foreground text-lg leading-relaxed mb-10 max-w-lg mx-auto">
@@ -130,7 +167,6 @@ const Index = () => {
                 <CareerInputPanel onGenerate={handleGenerate} isLoading={isLoading} />
               </motion.div>
 
-              {/* Feature cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
                 {features.map((f, i) => (
                   <motion.div
@@ -147,17 +183,13 @@ const Index = () => {
               </div>
             </motion.div>
           ) : (
-            /* ── Dashboard ── */
             <motion.div key="dashboard" {...fade} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              {/* Sidebar */}
               <div className="lg:col-span-4 xl:col-span-3 space-y-4">
                 <CareerInputPanel onGenerate={handleGenerate} isLoading={isLoading} />
                 {roadmap && (
                   <ProgressTracker completed={completedCount} total={roadmap.steps.length} totalWeeks={roadmap.totalWeeks} />
                 )}
               </div>
-
-              {/* Main content */}
               <div className="lg:col-span-8 xl:col-span-9">
                 {isLoading && !roadmap ? (
                   <SkeletonRoadmap />
